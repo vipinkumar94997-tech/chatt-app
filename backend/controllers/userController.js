@@ -1,56 +1,53 @@
-import User from "../models/User.js";
-import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
+import { Op } from "sequelize";
+import { User } from "../models/index.js";
+import { publicUserAttributes, serializeUser } from "../utils/chat.js";
 
-export const registerUser = async (req, res) => {
-  const { name, email, password } = req.body;
+export const searchUsers = async (req, res) => {
+  const search = req.query.search?.trim() || "";
 
   try {
-    const userExists = await User.findOne({ email });
-
-    if (userExists) {
-      return res.status(400).json({ message: "User already exists" });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const user = await User.create({
-      name,
-      email,
-      password: hashedPassword,
+    const users = await User.findAll({
+      attributes: publicUserAttributes,
+      where: {
+        id: { [Op.ne]: req.user.id },
+        ...(search
+          ? {
+              username: {
+                [Op.like]: `%${search}%`,
+              },
+            }
+          : {}),
+      },
+      order: [["username", "ASC"]],
+      limit: 20,
     });
 
-    res.status(201).json(user);
+    return res.json({ users: users.map(serializeUser) });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: "Unable to search users" });
   }
 };
 
-export const loginUser = async (req, res) => {
-  const { email, password } = req.body;
-
+export const updateProfile = async (req, res) => {
   try {
-    const user = await User.findOne({ email });
+    const username = req.body.username?.trim();
+    const profileImage = req.body.profileImage;
 
-    if (!user) {
-      return res.status(400).json({ message: "Invalid Email" });
+    if (!username || username.length < 2 || username.length > 50) {
+      return res.status(400).json({ message: "Username must be 2-50 characters" });
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
-
-    if (!isMatch) {
-      return res.status(400).json({ message: "Invalid Password" });
+    if (profileImage && profileImage.length > 1_500_000) {
+      return res.status(400).json({ message: "Profile image is too large" });
     }
 
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-      expiresIn: "7d",
-    });
+    const user = await User.findByPk(req.user.id);
+    user.username = username;
+    user.profileImage = profileImage || null;
+    await user.save();
 
-    res.status(200).json({
-      token,
-      user,
-    });
+    return res.json({ user: serializeUser(user) });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: "Unable to update profile" });
   }
 };
