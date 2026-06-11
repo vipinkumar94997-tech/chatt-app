@@ -57,11 +57,12 @@ function App() {
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [profileDraft, setProfileDraft] = useState({ username: "", profileImage: "" });
   const [groupDraft, setGroupDraft] = useState({ name: "", avatar: "", memberIds: [] });
-  const [isDarkMode, setIsDarkMode] = useState(
+  const [isDarkMode] = useState(
     () => localStorage.getItem("theme") === "dark",
   );
   const [toasts, setToasts] = useState([]);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [pinnedChats, setPinnedChats] = useState(
     () => JSON.parse(localStorage.getItem("pinnedChats") || "[]"),
   );
@@ -728,7 +729,7 @@ function App() {
   }
 
   return (
-    <main className={`chat-shell ${mobileChatOpen ? "chat-open" : ""}`}>
+    <main className={`chat-shell ${mobileChatOpen ? "chat-open" : ""} ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
       <aside className="chat-sidebar" aria-label="Conversations">
         <header className="sidebar-header">
           <button className="profile-button" type="button" onClick={() => setShowProfile(true)}>
@@ -740,10 +741,16 @@ function App() {
           </button>
           <div className="sidebar-title">
             <strong>{user.username}</strong>
-            <small className={socketStatus}>{socketStatus}</small>
+              <small className={socketStatus}>{socketStatus}</small>
           </div>
-          <button className="icon-button" type="button" onClick={() => setIsDarkMode((value) => !value)}>
-            {isDarkMode ? "Light" : "Dark"}
+          <button
+            className="icon-button sidebar-toggle"
+            type="button"
+            onClick={() => setSidebarCollapsed((value) => !value)}
+            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {sidebarCollapsed ? ">" : "<"}
           </button>
           <button className="icon-button" type="button" onClick={requestNotifications}>
             Notify
