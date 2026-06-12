@@ -1,24 +1,24 @@
 :root {
-  color: #111827;
-  background: #eef2f4;
+  color: #1f2c33;
+  background: #f0f2f5;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  --bg: #eef2f4;
+  --bg: #f0f2f5;
   --panel: #ffffff;
-  --panel-soft: #f3f6f7;
+  --panel-soft: #f0f2f5;
   --chat-bg: #efeae2;
-  --text: #111827;
+  --text: #1f2c33;
   --muted: #667781;
-  --line: #d8dee3;
+  --line: #e1e6e8;
   --primary: #008069;
   --primary-strong: #075e54;
   --accent: #5865f2;
   --danger: #b42318;
   --bubble-out: #d9fdd3;
   --bubble-in: #ffffff;
-  --shadow: 0 20px 70px rgba(15, 23, 42, 0.16);
+  --shadow: 0 2px 10px rgba(17, 27, 33, 0.08);
 }
 
 body[data-theme="dark"] {
@@ -554,8 +554,8 @@ input:focus {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   background:
-    linear-gradient(rgba(239, 234, 226, 0.86), rgba(239, 234, 226, 0.86)),
-    repeating-linear-gradient(45deg, rgba(17, 27, 33, 0.1) 0 1px, transparent 1px 18px);
+    linear-gradient(rgba(239, 234, 226, 0.94), rgba(239, 234, 226, 0.94)),
+    repeating-linear-gradient(45deg, rgba(17, 27, 33, 0.04) 0 1px, transparent 1px 18px);
 }
 
 body[data-theme="dark"] .chat-preview {
@@ -566,20 +566,20 @@ body[data-theme="dark"] .chat-preview {
 
 .chat-preview.theme-ocean {
   background:
-    linear-gradient(rgba(219, 234, 254, 0.86), rgba(204, 251, 241, 0.86)),
-    repeating-linear-gradient(45deg, rgba(14, 116, 144, 0.15) 0 1px, transparent 1px 18px);
+    linear-gradient(rgba(232, 245, 240, 0.94), rgba(239, 234, 226, 0.94)),
+    repeating-linear-gradient(45deg, rgba(0, 128, 105, 0.05) 0 1px, transparent 1px 18px);
 }
 
 .chat-preview.theme-grape {
   background:
-    linear-gradient(rgba(237, 233, 254, 0.88), rgba(250, 232, 255, 0.88)),
-    repeating-linear-gradient(45deg, rgba(126, 34, 206, 0.12) 0 1px, transparent 1px 18px);
+    linear-gradient(rgba(239, 234, 226, 0.94), rgba(245, 242, 235, 0.94)),
+    repeating-linear-gradient(45deg, rgba(17, 27, 33, 0.04) 0 1px, transparent 1px 18px);
 }
 
 .chat-preview.theme-sunset {
   background:
-    linear-gradient(rgba(255, 237, 213, 0.9), rgba(254, 226, 226, 0.9)),
-    repeating-linear-gradient(45deg, rgba(194, 65, 12, 0.13) 0 1px, transparent 1px 18px);
+    linear-gradient(rgba(239, 234, 226, 0.94), rgba(248, 242, 232, 0.94)),
+    repeating-linear-gradient(45deg, rgba(17, 27, 33, 0.04) 0 1px, transparent 1px 18px);
 }
 
 .sidebar-profile {
@@ -653,7 +653,7 @@ body[data-theme="dark"] .date-chip {
   color: var(--text);
   line-height: 1.35;
   word-break: break-word;
-  box-shadow: 0 1px 2px rgba(17, 27, 33, 0.12);
+  box-shadow: 0 1px 1px rgba(17, 27, 33, 0.08);
   animation: popIn 0.18s ease;
 }
 

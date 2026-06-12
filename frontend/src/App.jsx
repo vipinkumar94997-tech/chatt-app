@@ -6,7 +6,13 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
 
 const initialForm = { username: "", email: "", password: "" };
-const reactionSet = ["\u{1F44D}", "\u{2764}\u{FE0F}", "\u{1F602}", "\u{1F62E}", "\u{1F622}"];
+const reactionSet = [
+  "\u{1F44D}",
+  "\u{2764}\u{FE0F}",
+  "\u{1F602}",
+  "\u{1F62E}",
+  "\u{1F622}",
+];
 const chatThemes = ["classic", "ocean", "grape", "sunset"];
 const emojiSet = ["😀", "😂", "😍", "🔥", "👍", "🙏", "🎉", "💬"];
 
@@ -30,10 +36,41 @@ const formatJoined = (date) =>
     year: "numeric",
   }).format(new Date(date));
 
+const getMessageReactions = (reactions) => {
+  if (!reactions) return [];
+
+  let reactionMap = reactions;
+  if (typeof reactions === "string") {
+    try {
+      reactionMap = JSON.parse(reactions || "{}");
+    } catch {
+      return [];
+    }
+  }
+
+  if (
+    !reactionMap ||
+    typeof reactionMap !== "object" ||
+    Array.isArray(reactionMap)
+  ) {
+    return [];
+  }
+
+  return Object.values(reactionMap).filter(
+    (reaction) =>
+      typeof reaction === "string" &&
+      reaction.trim() &&
+      reaction !== "{" &&
+      reaction !== "}",
+  );
+};
+
 function App() {
   const [mode, setMode] = useState("login");
   const [form, setForm] = useState(initialForm);
-  const [token, setToken] = useState(() => localStorage.getItem("authToken") || "");
+  const [token, setToken] = useState(
+    () => localStorage.getItem("authToken") || "",
+  );
   const [user, setUser] = useState(null);
   const [authMessage, setAuthMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -55,16 +92,23 @@ function App() {
   const [typingLabel, setTypingLabel] = useState("");
   const [showProfile, setShowProfile] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
-  const [profileDraft, setProfileDraft] = useState({ username: "", profileImage: "" });
-  const [groupDraft, setGroupDraft] = useState({ name: "", avatar: "", memberIds: [] });
-  const [isDarkMode] = useState(
-    () => localStorage.getItem("theme") === "dark",
-  );
+  const [profileDraft, setProfileDraft] = useState({
+    username: "",
+    profileImage: "",
+  });
+  const [groupDraft, setGroupDraft] = useState({
+    name: "",
+    avatar: "",
+    memberIds: [],
+  });
   const [toasts, setToasts] = useState([]);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [pinnedChats, setPinnedChats] = useState(
-    () => JSON.parse(localStorage.getItem("pinnedChats") || "[]"),
+  const [isDarkMode, setIsDarkMode] = useState(
+    () => localStorage.getItem("theme") === "dark",
+  );
+  const [pinnedChats, setPinnedChats] = useState(() =>
+    JSON.parse(localStorage.getItem("pinnedChats") || "[]"),
   );
   const [chatTheme, setChatTheme] = useState(
     () => localStorage.getItem("chatTheme") || "classic",
@@ -80,7 +124,9 @@ function App() {
   const voiceChunksRef = useRef([]);
 
   const isRegistering = mode === "register";
-  const selectedMessages = selectedChat ? messagesByChat[selectedChat.key] || [] : [];
+  const selectedMessages = selectedChat
+    ? messagesByChat[selectedChat.key] || []
+    : [];
 
   const showToast = useCallback((text, tone = "info") => {
     const id = Date.now();
@@ -90,28 +136,38 @@ function App() {
     }, 3200);
   }, []);
 
-  const apiRequest = useCallback(async (path, options = {}) => {
-    const response = await fetch(`${API_URL}${path}`, {
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-        ...options.headers,
-      },
-    });
+  const apiRequest = useCallback(
+    async (path, options = {}) => {
+      const response = await fetch(`${API_URL}${path}`, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          ...options.headers,
+        },
+      });
 
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.message || "Request failed");
-    return data;
-  }, [token]);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || "Request failed");
+      return data;
+    },
+    [token],
+  );
 
-  const getChatKeyFromMessage = useCallback((message) => {
-    if (message.conversationType === "group") return `group:${message.groupId}`;
-    const otherId = message.senderId === user?.id
-      ? message.conversationId.split(":").find((id) => Number(id) !== user.id)
-      : message.senderId;
-    return `direct:${otherId}`;
-  }, [user]);
+  const getChatKeyFromMessage = useCallback(
+    (message) => {
+      if (message.conversationType === "group")
+        return `group:${message.groupId}`;
+      const otherId =
+        message.senderId === user?.id
+          ? message.conversationId
+              .split(":")
+              .find((id) => Number(id) !== user.id)
+          : message.senderId;
+      return `direct:${otherId}`;
+    },
+    [user],
+  );
 
   const conversations = useMemo(() => {
     const directChats = users.map((chatUser) => {
@@ -153,16 +209,18 @@ function App() {
       };
     });
 
-    return [...directChats, ...groupChats].sort((a, b) => {
-      const aPinned = pinnedChats.includes(a.key);
-      const bPinned = pinnedChats.includes(b.key);
-      if (aPinned === bPinned) return 0;
-      return aPinned ? -1 : 1;
-    }).filter((conversation) => {
-      if (navFilter === "unread") return conversation.unread > 0;
-      if (navFilter === "groups") return conversation.type === "group";
-      return true;
-    });
+    return [...directChats, ...groupChats]
+      .sort((a, b) => {
+        const aPinned = pinnedChats.includes(a.key);
+        const bPinned = pinnedChats.includes(b.key);
+        if (aPinned === bPinned) return 0;
+        return aPinned ? -1 : 1;
+      })
+      .filter((conversation) => {
+        if (navFilter === "unread") return conversation.unread > 0;
+        if (navFilter === "groups") return conversation.type === "group";
+        return true;
+      });
   }, [groups, messagesByChat, navFilter, pinnedChats, unreadCounts, users]);
 
   const visibleConversations = useMemo(() => {
@@ -290,7 +348,9 @@ function App() {
           ...current,
           [chatKey]: (current[chatKey] || 0) + 1,
         }));
-        showToast(`New message from ${incomingMessage.sender?.username || "chat"}`);
+        showToast(
+          `New message from ${incomingMessage.sender?.username || "chat"}`,
+        );
         if ("Notification" in window && Notification.permission === "granted") {
           new Notification(incomingMessage.sender?.username || "New message", {
             body: incomingMessage.text,
@@ -317,22 +377,31 @@ function App() {
       }));
     });
 
-    socket.on("messages:read", ({ conversationType, conversationId, groupId, userId }) => {
-      const key = conversationType === "group"
-        ? `group:${groupId}`
-        : `direct:${conversationId.split(":").find((id) => Number(id) !== user.id)}`;
+    socket.on(
+      "messages:read",
+      ({ conversationType, conversationId, groupId, userId }) => {
+        const key =
+          conversationType === "group"
+            ? `group:${groupId}`
+            : `direct:${conversationId.split(":").find((id) => Number(id) !== user.id)}`;
 
-      setMessagesByChat((current) => ({
-        ...current,
-        [key]: (current[key] || []).map((message) => {
-          if (message.senderId !== user.id) return message;
-          const alreadyRead = message.readBy?.some((reader) => reader.id === userId);
-          return alreadyRead
-            ? message
-            : { ...message, readBy: [...(message.readBy || []), { id: userId }] };
-        }),
-      }));
-    });
+        setMessagesByChat((current) => ({
+          ...current,
+          [key]: (current[key] || []).map((message) => {
+            if (message.senderId !== user.id) return message;
+            const alreadyRead = message.readBy?.some(
+              (reader) => reader.id === userId,
+            );
+            return alreadyRead
+              ? message
+              : {
+                  ...message,
+                  readBy: [...(message.readBy || []), { id: userId }],
+                };
+          }),
+        }));
+      },
+    );
 
     socket.on("chat:typing", (event) => {
       const activeChat = selectedChatRef.current;
@@ -350,7 +419,10 @@ function App() {
       if ((matchesDirect || matchesGroup) && event.isTyping) {
         setTypingLabel(`${event.username} is typing...`);
         window.clearTimeout(typingTimeoutRef.current);
-        typingTimeoutRef.current = window.setTimeout(() => setTypingLabel(""), 1800);
+        typingTimeoutRef.current = window.setTimeout(
+          () => setTypingLabel(""),
+          1800,
+        );
       }
     });
 
@@ -377,7 +449,9 @@ function App() {
     searchTimeoutRef.current = window.setTimeout(async () => {
       setIsSearching(true);
       try {
-        const data = await apiRequest(`/users?search=${encodeURIComponent(searchTerm)}`);
+        const data = await apiRequest(
+          `/users?search=${encodeURIComponent(searchTerm)}`,
+        );
         setSearchResults(data.users);
       } catch (error) {
         showToast(error.message, "error");
@@ -409,7 +483,8 @@ function App() {
         body: JSON.stringify(payload),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.message || "Authentication failed");
+      if (!response.ok)
+        throw new Error(data.message || "Authentication failed");
 
       localStorage.setItem("authToken", data.token);
       setToken(data.token);
@@ -447,7 +522,10 @@ function App() {
         method: "POST",
         body: JSON.stringify({
           conversationType: chat.type,
-          conversationId: chat.type === "direct" ? [user.id, chat.id].sort((a, b) => a - b).join(":") : `group:${chat.id}`,
+          conversationId:
+            chat.type === "direct"
+              ? [user.id, chat.id].sort((a, b) => a - b).join(":")
+              : `group:${chat.id}`,
           groupId: chat.type === "group" ? chat.id : undefined,
         }),
       }).catch((error) => showToast(error.message, "error"));
@@ -456,11 +534,15 @@ function App() {
 
     setLoadingMessages(true);
     try {
-      const path = chat.type === "direct"
-        ? `/messages/direct/${chat.id}`
-        : `/messages/group/${chat.id}`;
+      const path =
+        chat.type === "direct"
+          ? `/messages/direct/${chat.id}`
+          : `/messages/group/${chat.id}`;
       const data = await apiRequest(path);
-      setMessagesByChat((current) => ({ ...current, [chat.key]: data.messages }));
+      setMessagesByChat((current) => ({
+        ...current,
+        [chat.key]: data.messages,
+      }));
     } catch (error) {
       showToast(error.message, "error");
     } finally {
@@ -474,21 +556,32 @@ function App() {
     if (!text || !selectedChat || socketStatus !== "online") return;
 
     if (editingMessage) {
-      socketRef.current.emit("message:edit", { messageId: editingMessage.id, text }, (response) => {
-        if (!response?.ok) showToast(response?.message || "Message could not be edited", "error");
-      });
+      socketRef.current.emit(
+        "message:edit",
+        { messageId: editingMessage.id, text },
+        (response) => {
+          if (!response?.ok)
+            showToast(
+              response?.message || "Message could not be edited",
+              "error",
+            );
+        },
+      );
       setEditingMessage(null);
       setComposerText("");
       return;
     }
 
-    const eventName = selectedChat.type === "group" ? "group:message" : "direct:message";
-    const payload = selectedChat.type === "group"
-      ? { groupId: selectedChat.id, text }
-      : { receiverId: selectedChat.id, text };
+    const eventName =
+      selectedChat.type === "group" ? "group:message" : "direct:message";
+    const payload =
+      selectedChat.type === "group"
+        ? { groupId: selectedChat.id, text }
+        : { receiverId: selectedChat.id, text };
 
     socketRef.current.emit(eventName, payload, (response) => {
-      if (!response?.ok) showToast(response?.message || "Message could not be sent", "error");
+      if (!response?.ok)
+        showToast(response?.message || "Message could not be sent", "error");
     });
 
     setComposerText("");
@@ -497,13 +590,26 @@ function App() {
   const sendAttachment = (messageType, attachmentUrl, attachmentName) => {
     if (!selectedChat || socketStatus !== "online") return;
 
-    const eventName = selectedChat.type === "group" ? "group:message" : "direct:message";
-    const payload = selectedChat.type === "group"
-      ? { groupId: selectedChat.id, messageType, attachmentUrl, attachmentName }
-      : { receiverId: selectedChat.id, messageType, attachmentUrl, attachmentName };
+    const eventName =
+      selectedChat.type === "group" ? "group:message" : "direct:message";
+    const payload =
+      selectedChat.type === "group"
+        ? {
+            groupId: selectedChat.id,
+            messageType,
+            attachmentUrl,
+            attachmentName,
+          }
+        : {
+            receiverId: selectedChat.id,
+            messageType,
+            attachmentUrl,
+            attachmentName,
+          };
 
     socketRef.current.emit(eventName, payload, (response) => {
-      if (!response?.ok) showToast(response?.message || "Attachment could not be sent", "error");
+      if (!response?.ok)
+        showToast(response?.message || "Attachment could not be sent", "error");
     });
   };
 
@@ -521,11 +627,13 @@ function App() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
       voiceChunksRef.current = [];
-      recorder.ondataavailable = (event) => voiceChunksRef.current.push(event.data);
+      recorder.ondataavailable = (event) =>
+        voiceChunksRef.current.push(event.data);
       recorder.onstop = () => {
         const blob = new Blob(voiceChunksRef.current, { type: "audio/webm" });
         const reader = new FileReader();
-        reader.onload = () => sendAttachment("voice", reader.result, "voice-message.webm");
+        reader.onload = () =>
+          sendAttachment("voice", reader.result, "voice-message.webm");
         reader.readAsDataURL(blob);
         stream.getTracks().forEach((track) => track.stop());
         setIsRecording(false);
@@ -534,7 +642,10 @@ function App() {
       recorder.start();
       setIsRecording(true);
     } catch {
-      showToast("Microphone permission is required for voice messages", "error");
+      showToast(
+        "Microphone permission is required for voice messages",
+        "error",
+      );
     }
   };
 
@@ -547,14 +658,20 @@ function App() {
   };
 
   const reactToMessage = (messageId, reaction) => {
-    socketRef.current?.emit("message:reaction", { messageId, reaction }, (response) => {
-      if (!response?.ok) showToast(response?.message || "Reaction failed", "error");
-    });
+    socketRef.current?.emit(
+      "message:reaction",
+      { messageId, reaction },
+      (response) => {
+        if (!response?.ok)
+          showToast(response?.message || "Reaction failed", "error");
+      },
+    );
   };
 
   const deleteMessage = (messageId) => {
     socketRef.current?.emit("message:delete", { messageId }, (response) => {
-      if (!response?.ok) showToast(response?.message || "Delete failed", "error");
+      if (!response?.ok)
+        showToast(response?.message || "Delete failed", "error");
     });
   };
 
@@ -570,7 +687,11 @@ function App() {
     }
 
     const permission = await Notification.requestPermission();
-    showToast(permission === "granted" ? "Notifications enabled" : "Notifications blocked");
+    showToast(
+      permission === "granted"
+        ? "Notifications enabled"
+        : "Notifications blocked",
+    );
   };
 
   const handleTyping = (value) => {
@@ -618,7 +739,9 @@ function App() {
           body: JSON.stringify(groupDraft),
         });
         setGroups((current) =>
-          current.map((group) => (group.id === data.group.id ? data.group : group)),
+          current.map((group) =>
+            group.id === data.group.id ? data.group : group,
+          ),
         );
         socketRef.current?.emit("group:created", data.group.id);
       } else {
@@ -670,17 +793,27 @@ function App() {
           <div className="brand-panel">
             <p className="eyebrow">Realtime Chat</p>
             <h1>Secure chat with groups, profiles, and live messages.</h1>
-            <p>Sign in to use the WhatsApp and Discord inspired chat experience.</p>
+            <p>
+              Sign in to use the WhatsApp and Discord inspired chat experience.
+            </p>
           </div>
 
           <form className="auth-card" onSubmit={handleAuthSubmit}>
             <div>
               <p className="eyebrow">Account access</p>
               <h2>{isRegistering ? "Create account" : "Welcome back"}</h2>
-              <p>{isRegistering ? "Register a new chat account." : "Sign in to continue."}</p>
+              <p>
+                {isRegistering
+                  ? "Register a new chat account."
+                  : "Sign in to continue."}
+              </p>
             </div>
 
-            <div className="mode-switch" role="tablist" aria-label="Authentication mode">
+            <div
+              className="mode-switch"
+              role="tablist"
+              aria-label="Authentication mode"
+            >
               <button
                 type="button"
                 className={!isRegistering ? "active" : ""}
@@ -700,12 +833,23 @@ function App() {
             {isRegistering && (
               <label>
                 Username
-                <input name="username" value={form.username} onChange={handleAuthChange} required />
+                <input
+                  name="username"
+                  value={form.username}
+                  onChange={handleAuthChange}
+                  required
+                />
               </label>
             )}
             <label>
               Email
-              <input type="email" name="email" value={form.email} onChange={handleAuthChange} required />
+              <input
+                type="email"
+                name="email"
+                value={form.email}
+                onChange={handleAuthChange}
+                required
+              />
             </label>
             <label>
               Password
@@ -720,7 +864,11 @@ function App() {
             </label>
             {authMessage && <p className="form-message">{authMessage}</p>}
             <button className="primary-button" disabled={isLoading}>
-              {isLoading ? "Please wait..." : isRegistering ? "Create account" : "Login"}
+              {isLoading
+                ? "Please wait..."
+                : isRegistering
+                  ? "Create account"
+                  : "Login"}
             </button>
           </form>
         </section>
@@ -729,10 +877,16 @@ function App() {
   }
 
   return (
-    <main className={`chat-shell ${mobileChatOpen ? "chat-open" : ""} ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
+    <main
+      className={`chat-shell ${mobileChatOpen ? "chat-open" : ""} ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}
+    >
       <aside className="chat-sidebar" aria-label="Conversations">
         <header className="sidebar-header">
-          <button className="profile-button" type="button" onClick={() => setShowProfile(true)}>
+          <button
+            className="profile-button "
+            type="button"
+            onClick={() => setShowProfile(true)}
+          >
             {user.profileImage ? (
               <img src={user.profileImage} alt="" />
             ) : (
@@ -741,19 +895,33 @@ function App() {
           </button>
           <div className="sidebar-title">
             <strong>{user.username}</strong>
-              <small className={socketStatus}>{socketStatus}</small>
+            <small className={socketStatus}>{socketStatus}</small>
           </div>
+
+          <button
+            className="icon-button theme-toggle"
+            type="button"
+            onClick={() => setIsDarkMode((value) => !value)}
+          >
+            {isDarkMode ? "Light" : "Dark"}
+          </button>
+          <button
+            className="icon-button"
+            type="button"
+            onClick={requestNotifications}
+          >
+            Notify
+          </button>
           <button
             className="icon-button sidebar-toggle"
             type="button"
             onClick={() => setSidebarCollapsed((value) => !value)}
-            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={
+              sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
+            }
             title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             {sidebarCollapsed ? ">" : "<"}
-          </button>
-          <button className="icon-button" type="button" onClick={requestNotifications}>
-            Notify
           </button>
         </header>
 
@@ -768,7 +936,11 @@ function App() {
               {filter}
             </button>
           ))}
-          <button type="button" className="toolbar-button create" onClick={startCreateGroup}>
+          <button
+            type="button"
+            className="toolbar-button create"
+            onClick={startCreateGroup}
+          >
             New group
           </button>
         </nav>
@@ -811,7 +983,9 @@ function App() {
                     })
                   }
                 >
-                  <span className="chat-avatar">{getInitials(chatUser.username)}</span>
+                  <span className="chat-avatar">
+                    {getInitials(chatUser.username)}
+                  </span>
                   <span className="conversation-main">
                     <strong>{chatUser.username}</strong>
                     <span>{chatUser.email}</span>
@@ -834,8 +1008,14 @@ function App() {
                 onClick={() => handleOpenChat(conversation)}
               >
                 <span className="chat-avatar">
-                  {conversation.avatar ? <img src={conversation.avatar} alt="" /> : getInitials(conversation.name)}
-                  {conversation.status === "online" && <span className="online-dot"></span>}
+                  {conversation.avatar ? (
+                    <img src={conversation.avatar} alt="" />
+                  ) : (
+                    getInitials(conversation.name)
+                  )}
+                  {conversation.status === "online" && (
+                    <span className="online-dot"></span>
+                  )}
                 </span>
                 <span className="conversation-main">
                   <span className="conversation-topline">
@@ -843,7 +1023,12 @@ function App() {
                     <time>{conversation.time}</time>
                   </span>
                   <span className="conversation-preview">
-                    <span>{pinnedChats.includes(conversation.key) ? "Pinned - " : ""}{conversation.preview}</span>
+                    <span>
+                      {pinnedChats.includes(conversation.key)
+                        ? "Pinned - "
+                        : ""}
+                      {conversation.preview}
+                    </span>
                     {conversation.unread > 0 && <b>{conversation.unread}</b>}
                   </span>
                 </span>
@@ -863,16 +1048,27 @@ function App() {
         </div>
       </aside>
 
-      <section className={`chat-preview theme-${chatTheme}`} aria-label="Selected conversation">
+      <section
+        className={`chat-preview theme-${chatTheme}`}
+        aria-label="Selected conversation"
+      >
         {selectedChat ? (
           <>
             <header className="chat-preview-header">
-              <button className="mobile-back" type="button" onClick={() => setMobileChatOpen(false)}>
+              <button
+                className="mobile-back"
+                type="button"
+                onClick={() => setMobileChatOpen(false)}
+              >
                 Back
               </button>
               <div className="sidebar-profile">
                 <span className="chat-avatar large">
-                  {selectedChat.avatar ? <img src={selectedChat.avatar} alt="" /> : getInitials(selectedChat.name)}
+                  {selectedChat.avatar ? (
+                    <img src={selectedChat.avatar} alt="" />
+                  ) : (
+                    getInitials(selectedChat.name)
+                  )}
                 </span>
                 <div>
                   <strong>{selectedChat.name}</strong>
@@ -889,17 +1085,30 @@ function App() {
                 </div>
               </div>
               <div className="preview-actions">
-                <select value={chatTheme} onChange={(event) => setChatTheme(event.target.value)}>
+                <select
+                  value={chatTheme}
+                  onChange={(event) => setChatTheme(event.target.value)}
+                >
                   {chatThemes.map((theme) => (
-                    <option key={theme} value={theme}>{theme}</option>
+                    <option key={theme} value={theme}>
+                      {theme}
+                    </option>
                   ))}
                 </select>
                 {selectedChat.type === "group" && (
-                  <button type="button" className="icon-button" onClick={startManageGroup}>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    onClick={startManageGroup}
+                  >
                     Group
                   </button>
                 )}
-                <button type="button" className="icon-button" onClick={() => setSearchTerm("")}>
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={() => setSearchTerm("")}
+                >
                   Find
                 </button>
               </div>
@@ -914,44 +1123,85 @@ function App() {
               {!loadingMessages &&
                 selectedMessages.map((chatMessage) => {
                   const isOwn = chatMessage.senderId === user.id;
+                  const messageReactions = getMessageReactions(
+                    chatMessage.reactions,
+                  );
                   return (
-                    <div key={chatMessage.id} className={`message-bubble ${isOwn ? "outgoing" : "incoming"}`}>
+                    <div
+                      key={chatMessage.id}
+                      className={`message-bubble ${isOwn ? "outgoing" : "incoming"}`}
+                    >
                       {selectedChat.type === "group" && !isOwn && (
                         <strong>{chatMessage.sender?.username}</strong>
                       )}
-                      {chatMessage.messageType === "image" && chatMessage.attachmentUrl && (
-                        <img className="shared-image" src={chatMessage.attachmentUrl} alt={chatMessage.attachmentName || "Shared"} />
-                      )}
-                      {chatMessage.messageType === "voice" && chatMessage.attachmentUrl && (
-                        <audio controls src={chatMessage.attachmentUrl}></audio>
-                      )}
-                      <p className={chatMessage.deletedAt ? "deleted-text" : ""}>
+                      {chatMessage.messageType === "image" &&
+                        chatMessage.attachmentUrl && (
+                          <img
+                            className="shared-image"
+                            src={chatMessage.attachmentUrl}
+                            alt={chatMessage.attachmentName || "Shared"}
+                          />
+                        )}
+                      {chatMessage.messageType === "voice" &&
+                        chatMessage.attachmentUrl && (
+                          <audio
+                            controls
+                            src={chatMessage.attachmentUrl}
+                          ></audio>
+                        )}
+                      <p
+                        className={chatMessage.deletedAt ? "deleted-text" : ""}
+                      >
                         {chatMessage.text}
                       </p>
-                      {Object.values(chatMessage.reactions || {}).length > 0 && (
+                      {messageReactions.length > 0 && (
                         <div className="reaction-row">
-                          {Object.values(chatMessage.reactions).map((reaction, index) => (
+                          {messageReactions.map((reaction, index) => (
                             <span key={`${reaction}-${index}`}>{reaction}</span>
                           ))}
                         </div>
                       )}
                       <div className="message-actions">
                         {reactionSet.map((reaction) => (
-                          <button type="button" key={reaction} onClick={() => reactToMessage(chatMessage.id, reaction)}>
+                          <button
+                            type="button"
+                            key={reaction}
+                            onClick={() =>
+                              reactToMessage(chatMessage.id, reaction)
+                            }
+                          >
                             {reaction}
                           </button>
                         ))}
-                        {isOwn && !chatMessage.deletedAt && chatMessage.messageType === "text" && (
-                          <button type="button" onClick={() => beginEditMessage(chatMessage)}>Edit</button>
-                        )}
+                        {isOwn &&
+                          !chatMessage.deletedAt &&
+                          chatMessage.messageType === "text" && (
+                            <button
+                              type="button"
+                              onClick={() => beginEditMessage(chatMessage)}
+                            >
+                              Edit
+                            </button>
+                          )}
                         {isOwn && !chatMessage.deletedAt && (
-                          <button type="button" onClick={() => deleteMessage(chatMessage.id)}>Delete</button>
+                          <button
+                            type="button"
+                            onClick={() => deleteMessage(chatMessage.id)}
+                          >
+                            Delete
+                          </button>
                         )}
                       </div>
                       <span>
                         {formatTime(chatMessage.createdAt)}
                         {chatMessage.editedAt ? " edited" : ""}
-                        {isOwn ? (chatMessage.readBy?.some((reader) => reader.id !== user.id) ? " seen" : " sent") : ""}
+                        {isOwn
+                          ? chatMessage.readBy?.some(
+                              (reader) => reader.id !== user.id,
+                            )
+                            ? " seen"
+                            : " sent"
+                          : ""}
                       </span>
                     </div>
                   );
@@ -965,7 +1215,9 @@ function App() {
                   <button
                     type="button"
                     key={emoji}
-                    onClick={() => setComposerText((value) => `${value}${emoji}`)}
+                    onClick={() =>
+                      setComposerText((value) => `${value}${emoji}`)
+                    }
                   >
                     {emoji}
                   </button>
@@ -974,29 +1226,47 @@ function App() {
               {editingMessage && (
                 <div className="editing-pill">
                   Editing message
-                  <button type="button" onClick={() => {
-                    setEditingMessage(null);
-                    setComposerText("");
-                  }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingMessage(null);
+                      setComposerText("");
+                    }}
+                  >
                     Cancel
                   </button>
                 </div>
               )}
               <label className="attach-button">
                 Image
-                <input type="file" accept="image/*" onChange={(event) => handleImageShare(event.target.files?.[0])} />
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) =>
+                    handleImageShare(event.target.files?.[0])
+                  }
+                />
               </label>
-              <button type="button" className={`record-button ${isRecording ? "active" : ""}`} onClick={toggleRecording}>
+              <button
+                type="button"
+                className={`record-button ${isRecording ? "active" : ""}`}
+                onClick={toggleRecording}
+              >
                 {isRecording ? "Stop" : "Voice"}
               </button>
               <input
                 type="text"
                 value={composerText}
                 onChange={(event) => handleTyping(event.target.value)}
-                placeholder={socketStatus === "online" ? "Type a message" : "Connecting..."}
+                placeholder={
+                  socketStatus === "online" ? "Type a message" : "Connecting..."
+                }
                 disabled={socketStatus !== "online"}
               />
-              <button className="send-button" disabled={!composerText.trim() || socketStatus !== "online"}>
+              <button
+                className="send-button"
+                disabled={!composerText.trim() || socketStatus !== "online"}
+              >
                 Send
               </button>
             </form>
@@ -1004,7 +1274,10 @@ function App() {
         ) : (
           <div className="empty-chat">
             <h2>Select a chat</h2>
-            <p>Search for users, create a group, or open an existing conversation.</p>
+            <p>
+              Search for users, create a group, or open an existing
+              conversation.
+            </p>
           </div>
         )}
       </section>
@@ -1014,11 +1287,17 @@ function App() {
           <form className="modal" onSubmit={saveProfile}>
             <header>
               <h2>Profile</h2>
-              <button type="button" onClick={() => setShowProfile(false)}>Close</button>
+              <button type="button" onClick={() => setShowProfile(false)}>
+                Close
+              </button>
             </header>
             <div className="profile-hero">
               <span className="profile-photo">
-                {profileDraft.profileImage ? <img src={profileDraft.profileImage} alt="" /> : getInitials(user.username)}
+                {profileDraft.profileImage ? (
+                  <img src={profileDraft.profileImage} alt="" />
+                ) : (
+                  getInitials(user.username)
+                )}
               </span>
               <label className="upload-button">
                 Change photo
@@ -1027,7 +1306,10 @@ function App() {
                   accept="image/*"
                   onChange={(event) =>
                     imageToDataUrl(event.target.files?.[0], (value) =>
-                      setProfileDraft((current) => ({ ...current, profileImage: value })),
+                      setProfileDraft((current) => ({
+                        ...current,
+                        profileImage: value,
+                      })),
                     )
                   }
                 />
@@ -1038,17 +1320,32 @@ function App() {
               <input
                 value={profileDraft.username}
                 onChange={(event) =>
-                  setProfileDraft((current) => ({ ...current, username: event.target.value }))
+                  setProfileDraft((current) => ({
+                    ...current,
+                    username: event.target.value,
+                  }))
                 }
               />
             </label>
             <div className="profile-facts">
-              <p>Email <strong>{user.email}</strong></p>
-              <p>Joined <strong>{formatJoined(user.createdAt)}</strong></p>
-              <p>Status <strong>{socketStatus}</strong></p>
+              <p>
+                Email <strong>{user.email}</strong>
+              </p>
+              <p>
+                Joined <strong>{formatJoined(user.createdAt)}</strong>
+              </p>
+              <p>
+                Status <strong>{socketStatus}</strong>
+              </p>
             </div>
             <div className="modal-actions">
-              <button type="button" className="secondary-button" onClick={handleLogout}>Logout</button>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={handleLogout}
+              >
+                Logout
+              </button>
               <button className="primary-button">Save profile</button>
             </div>
           </form>
@@ -1060,14 +1357,19 @@ function App() {
           <form className="modal" onSubmit={createOrUpdateGroup}>
             <header>
               <h2>{groupDraft.id ? "Manage group" : "Create group"}</h2>
-              <button type="button" onClick={() => setShowGroupModal(false)}>Close</button>
+              <button type="button" onClick={() => setShowGroupModal(false)}>
+                Close
+              </button>
             </header>
             <label>
               Group name
               <input
                 value={groupDraft.name}
                 onChange={(event) =>
-                  setGroupDraft((current) => ({ ...current, name: event.target.value }))
+                  setGroupDraft((current) => ({
+                    ...current,
+                    name: event.target.value,
+                  }))
                 }
                 required
               />
@@ -1097,7 +1399,9 @@ function App() {
                           ...current,
                           memberIds: event.target.checked
                             ? [...current.memberIds, chatUser.id]
-                            : current.memberIds.filter((id) => id !== chatUser.id),
+                            : current.memberIds.filter(
+                                (id) => id !== chatUser.id,
+                              ),
                         }))
                       }
                     />
@@ -1106,14 +1410,18 @@ function App() {
                 );
               })}
             </div>
-            <button className="primary-button">{groupDraft.id ? "Save group" : "Create group"}</button>
+            <button className="primary-button">
+              {groupDraft.id ? "Save group" : "Create group"}
+            </button>
           </form>
         </div>
       )}
 
       <div className="toast-stack">
         {toasts.map((toast) => (
-          <div className={`toast ${toast.tone}`} key={toast.id}>{toast.text}</div>
+          <div className={`toast ${toast.tone}`} key={toast.id}>
+            {toast.text}
+          </div>
         ))}
       </div>
     </main>

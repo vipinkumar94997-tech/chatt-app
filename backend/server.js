@@ -69,6 +69,25 @@ const buildMessagePayload = ({ text, messageType, attachmentUrl, attachmentName 
   };
 };
 
+const parseMessageReactions = (reactions) => {
+  if (!reactions) return {};
+
+  if (typeof reactions === "string") {
+    try {
+      const parsed = JSON.parse(reactions);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? parsed
+        : {};
+    } catch {
+      return {};
+    }
+  }
+
+  return typeof reactions === "object" && !Array.isArray(reactions)
+    ? reactions
+    : {};
+};
+
 app.use(
   cors({
     origin: ["http://localhost:5173", "http://localhost:5174"],
@@ -284,25 +303,35 @@ io.on("connection", async (socket) => {
   });
 
   socket.on("message:reaction", async ({ messageId, reaction }, callback) => {
-    const message = await Message.findByPk(messageId);
-    if (!message || message.deletedAt) {
-      callback?.({ ok: false, message: "Message cannot be reacted to" });
+    if (typeof reaction !== "string" || !reaction.trim()) {
+      callback?.({ ok: false, message: "Reaction is required" });
       return;
     }
 
-    const nextReactions = { ...(message.reactions || {}) };
-    if (nextReactions[socket.user.id] === reaction) {
-      delete nextReactions[socket.user.id];
-    } else {
-      nextReactions[socket.user.id] = reaction;
+    try {
+      const message = await Message.findByPk(messageId);
+      if (!message || message.deletedAt) {
+        callback?.({ ok: false, message: "Message cannot be reacted to" });
+        return;
+      }
+
+      const nextReactions = parseMessageReactions(message.reactions);
+      if (nextReactions[socket.user.id] === reaction) {
+        delete nextReactions[socket.user.id];
+      } else {
+        nextReactions[socket.user.id] = reaction;
+      }
+
+      message.reactions = nextReactions;
+      await message.save();
+
+      const fullMessage = await Message.findByPk(message.id, { include: messageIncludes });
+      io.emit("message:updated", fullMessage);
+      callback?.({ ok: true, message: fullMessage });
+    } catch (error) {
+      console.error("Unable to update reaction:", error.message);
+      callback?.({ ok: false, message: "Reaction could not be updated" });
     }
-
-    message.reactions = nextReactions;
-    await message.save();
-
-    const fullMessage = await Message.findByPk(message.id, { include: messageIncludes });
-    io.emit("message:updated", fullMessage);
-    callback?.({ ok: true, message: fullMessage });
   });
 
   socket.on("group:created", async (groupId) => {
@@ -390,6 +419,15 @@ const startServer = async () => {
       console.log(`Server Running on port ${port}`);
     });
   } catch (error) {
+    if (error?.code === "ECONNREFUSED") {
+      const dbHost = process.env.DB_HOST || "localhost";
+      const dbPort = Number(process.env.DB_PORT) || 3306;
+
+      console.error(
+        `Unable to connect to MySQL at ${dbHost}:${dbPort}. Start MySQL/MariaDB or update DB_HOST and DB_PORT in backend/.env.`,
+      );
+    }
+
     console.error("Unable to start server:", error);
     process.exit(1);
   }
